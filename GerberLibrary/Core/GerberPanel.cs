@@ -1575,42 +1575,43 @@ namespace GerberLibrary
                 FinalFiles.Add(Path.Combine(targetfolder, combinedfilename + ".gko"));
             }
 
-            // TODO: use the new Gerber.DetermineFile to actually group based on layer/type instead of extentions only!
-
-            Dictionary<string, List<string>> FilesPerExt = new Dictionary<string, List<string>>();
-            Dictionary<string, BoardFileType> FileTypePerExt = new Dictionary<string, BoardFileType>();
+            Dictionary<Tuple<BoardSide, BoardLayer>, List<string>> files = new Dictionary<Tuple<BoardSide, BoardLayer>, List<string>>();
             foreach (var s in GeneratedFiles)
             {
-                string ext = Path.GetExtension(s).ToLower(); ;
-                if (ext == "xln") ext = "txt";
-                if (ext == "drl") ext = "txt";
-                if (FilesPerExt.ContainsKey(ext) == false)
+                BoardSide side = BoardSide.Unknown;
+                BoardLayer layer = BoardLayer.Unknown;
+                Gerber.DetermineBoardSideAndLayer(s, out side, out layer);
+
+                var key = new Tuple<BoardSide, BoardLayer>(side, layer);
+
+                if (!files.ContainsKey(key))
                 {
-                    FilesPerExt[ext] = new List<string>();
+                    files[key] = new List<string>();
                 }
 
-                FileTypePerExt[ext] = Gerber.FindFileType(s);
-                FilesPerExt[ext].Add(s);
+                files[key].Add(s);
             }
             int count = 0;
-            foreach (var a in FilesPerExt)
+            foreach (var a in files)
             {
                 count++;
-                Logger.AddString("merging *" + a.Key.ToLower(), ((float)count / (float)FilesPerExt.Keys.Count) * 0.5f + 0.3f);
-                switch (FileTypePerExt[a.Key])
+                Logger.AddString("merging " + a.Key.Item1 + " " + a.Key.Item2, ((float)count / (float)files.Keys.Count) * 0.5f + 0.3f);
+                string file = a.Value[0];
+                string ext = Path.GetExtension(file).ToLower();
+                BoardFileType type = Gerber.FindFileType(file);
+                string Filename = Path.Combine(targetfolder, combinedfilename + "_" + a.Key.Item1 + "_" + a.Key.Item2 + ext);
+                switch (type)
                 {
                     case BoardFileType.Drill:
                         {
-                            string Filename = Path.Combine(targetfolder, combinedfilename + a.Key);
                             FinalFiles.Add(Filename);
                             ExcellonFile.MergeAll(a.Value, Filename, Logger);
                         }
                         break;
                     case BoardFileType.Gerber:
                         {
-                            if (a.Key.ToLower() != ".gko")
+                            if (ext != ".gko")
                             {
-                                string Filename = Path.Combine(targetfolder, combinedfilename + a.Key);
                                 FinalFiles.Add(Filename);
                                 GerberMerger.MergeAll(a.Value, Filename, Logger);
                             }
